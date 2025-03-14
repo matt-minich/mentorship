@@ -1,0 +1,54 @@
+---
+title: "Signal Detection Theory Tutorial"
+author: "Matt Minich"
+date: '2022-08-17'
+output: html_document
+---
+Hello! This document is a quick-and-dirty tutorial on how to perform signal detection theory analysis in R. This type of analysis is used when participants are asked to make decisions, and their choices can be categorized as "correct" or "incorrect"
+
+Let's say we showed 20 participants a bunch of stimuli, then we show them a number of items (11) and ask them whether they were among the stimuli we showed them. Five of our items are from the stimuli, but six are foils. Participants answer "1" to say they have seen the item and "0" to say they have not. 
+
+Let's make a simulated dataset. We'll assume that participants are slightly more likely to identify stimuli than foils.
+```{r}
+df <- data.frame(ID = seq.int(1,20,by =1), stim1 = rbinom(n = 20, size = 1, prob = 0.7), stim2 = rbinom(n = 20, size = 1, prob = 0.7), stim3 = rbinom(n = 20, size = 1, prob = 0.7), stim4 = rbinom(n = 20, size = 1, prob = 0.7), stim5 = rbinom(n = 20, size = 1, prob = 0.7), foil1 = rbinom(n = 20, size = 1, prob = 0.3),foil2 = rbinom(n = 20, size = 1, prob = 0.3),foil3 = rbinom(n = 20, size = 1, prob = 0.3),foil4 = rbinom(n = 20, size = 1, prob = 0.3),foil5 = rbinom(n = 20, size = 1, prob = 0.3),foil6 = rbinom(n = 20, size = 1, prob = 0.3))
+head(df)
+```
+
+Signal detection is actually pretty simple! We just estimate a "hit rate" (rate of successful identifications) and a "false alarm rate" (rate of incorrect identifications), then z-score them both. With these values, we can estimate two measures:
+
+The first captures a participant's sensitivity to "signal" (i.e. the correct answer). That's called "dprime".
+
+The second captures a participant's bias (i.e. their tendency to say "yes" when in doubt). That's called "c" 
+
+ 
+```{r}
+#Calculating the hit rate and false alarm rate
+df$hitrate <- (df$stim1+df$stim2+df$stim3+df$stim4+df$stim5)/5
+df$falsealarmrate <- (df$foil1+df$foil2+df$foil3+df$foil4+df$foil5+df$foil6)/6
+#Now we z score hit rate and false alarm rate
+df$hitrate_Z <- qnorm(df$hitrate)
+df$falsealarmrate_Z <- qnorm(df$falsealarmrate)
+#We calculate dprime by subtracting the false alarm rate from the hit rate
+df$dprime <- df$hitrate_Z - df$falsealarmrate_Z
+#We caclulate c by adding summing the hit rate and false alarm rate, then multiplying by -.5
+df$c <- -.5*(df$hitrate_Z + df$falsealarmrate_Z)
+```
+
+Wait... there's a problem here! In some cases, the dprime and c are coming back as infinite? This is because hit rates and false alarm rates of 1 or 0 are undefined when standardized. We should avoid this by pilot testing our experiments... but we can also do a little adjustment to make analysis possible with the data we have. We'll just add a tiny tiny bit to the denominator of our ratios to avoid getting a 1, and a tiny tiny bit to the numerator to avoid getting a 0 (the numerator bit needs to be slightly smaller than the denominator bit)
+
+```{r}
+# Calculating the rates with these tiny adjustments
+df$hitrate_adj <- (df$stim1+df$stim2+df$stim3+df$stim4+df$stim5+1e-12)/(5+2e-12)
+df$falsealarmrate_adj <- (df$foil1+df$foil2+df$foil3+df$foil4+df$foil5+df$foil6+1e-12)/(6+2e-12)
+# Z-scoring these rates
+df$hitrate_adj_Z <- qnorm(df$hitrate_adj)
+df$falsealarmrate_adj_Z <- (qnorm(df$falsealarmrate_adj))
+# Calculating dprime
+df$dprime_adj <- df$hitrate_adj_Z - df$falsealarmrate_adj_Z
+# Calculating c
+df$c_adj <- -.5*(df$hitrate_adj_Z + df$falsealarmrate_adj_Z)
+df
+```
+If you compare the adjusted numbers with the unadjusted numbers, you should see that the items that were not undefined are identical. That's because the changes we made are so insignificant they've been rounded off. 
+
+Now you have a good measure of sensitivity (dprime_adj) and a good measure of bias (c_adj)! These can be used as DVs in other analyses. 
